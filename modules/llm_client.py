@@ -16,6 +16,7 @@ import httpx
 import json
 import re
 import os
+import shlex
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass
@@ -101,7 +102,7 @@ def get_system_context() -> str:
     try:
         home_dirs = [d.name for d in home.iterdir() if d.is_dir() and not d.name.startswith('.')][:15]
         context_parts.append(f"Home directories: {', '.join(sorted(home_dirs))}")
-    except:
+    except OSError:
         pass
 
     # Check for common project directories
@@ -183,16 +184,21 @@ def fix_placeholders(cmd: str) -> str:
     for pattern, replacement in replacements:
         cmd = re.sub(pattern, replacement, cmd, flags=re.IGNORECASE)
 
-    # Expand ~ and environment variables
-    parts = cmd.split()
-    expanded_parts = []
-    for part in parts:
-        if part.startswith('~') or '$' in part:
-            expanded_parts.append(os.path.expanduser(os.path.expandvars(part)))
-        else:
-            expanded_parts.append(part)
+    # Expand ~ and environment variables while preserving quoted strings
+    try:
+        parts = shlex.split(cmd)
+        expanded_parts = []
+        for part in parts:
+            if part.startswith('~') or '$' in part:
+                expanded_parts.append(shlex.quote(os.path.expanduser(os.path.expandvars(part))))
+            else:
+                # Re-quote if part contains spaces or special chars
+                expanded_parts.append(shlex.quote(part) if ' ' in part or any(c in part for c in ';&|<>') else part)
 
-    return ' '.join(expanded_parts)
+        return ' '.join(expanded_parts)
+    except ValueError:
+        # shlex.split can fail on malformed strings, fall back to simple expansion
+        return os.path.expanduser(os.path.expandvars(cmd))
 
 
 def apply_command_intelligence(cmd: str) -> Tuple[str, List[str]]:
@@ -225,12 +231,25 @@ def apply_command_intelligence(cmd: str) -> Tuple[str, List[str]]:
     # Fix 5: Use -p with touch for nested paths (touch doesn't support -p, but we can mkdir first)
     touch_match = re.match(r'^touch\s+(.+)$', cmd)
     if touch_match:
-        path = touch_match.group(1).strip()
-        expanded = os.path.expanduser(path)
-        parent = os.path.dirname(expanded)
-        if parent and not os.path.exists(parent):
-            cmd = f'mkdir -p {os.path.dirname(path)} && touch {path}'
-            fixes.append(f'Added mkdir -p for parent directory')
+        paths_str = touch_match.group(1).strip()
+        try:
+            paths = shlex.split(paths_str)
+        except ValueError:
+            paths = paths_str.split()
+
+        missing_parents = []
+        for path in paths:
+            expanded = os.path.expanduser(path)
+            parent = os.path.dirname(expanded)
+            if parent and not os.path.exists(parent):
+                missing_parents.append(os.path.dirname(path))
+
+        if missing_parents:
+            # Deduplicate and create mkdir commands for each missing parent
+            unique_parents = list(dict.fromkeys(missing_parents))
+            mkdir_cmd = 'mkdir -p ' + ' '.join(shlex.quote(p) for p in unique_parents)
+            cmd = f'{mkdir_cmd} && touch {paths_str}'
+            fixes.append('Added mkdir -p for parent directories')
 
     return cmd, fixes
 
@@ -318,6 +337,7 @@ def query_anthropic(user_input: str, config: LLMConfig, context: str) -> dict:
     payload = {
         'model': config.model,
         'max_tokens': config.max_tokens,
+        'temperature': config.temperature,
         'system': prompt,
         'messages': [
             {'role': 'user', 'content': user_input}
@@ -512,7 +532,7 @@ def list_available_providers() -> List[str]:
         response = httpx.get('http://localhost:11434/api/tags', timeout=2)
         if response.status_code == 200:
             available.append('ollama')
-    except:
+    except httpx.HTTPError:
         pass
 
     # Check cloud providers by API key presence

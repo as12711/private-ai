@@ -1,0 +1,153 @@
+# Permission tiers with regex patterns
+# Order matters: first match wins, check from blocked -> confirm -> standard -> auto
+
+tiers:
+  # BLOCKED: Never allowed - dangerous system operations
+  blocked:
+    - 'rm -rf\s+/$'                    # Root wipe
+    - 'rm -rf\s+/\*'                   # Root glob wipe
+    - '^dd\s+'                         # Disk operations
+    - '^mkfs'                          # Filesystem creation
+    - '^fdisk'                         # Partition editing
+    - '^parted'                        # Partition editing
+    - '^shred'                         # Secure delete
+    - ':\(\)\{\s*:\|:&\s*\};:'         # Fork bomb
+    - '>\s*/dev/sd'                    # Direct disk write
+    - 'chmod\s+-R\s+777\s+/'           # Recursive permission disaster
+    - 'chown\s+-R.*\s+/$'              # Root ownership change
+    - '>\s*/dev/null\s+2>&1\s*&'       # Background null redirect (hiding)
+
+  # CONFIRM: Requires explicit user confirmation
+  confirm:
+    - '^sudo\s+'                       # Any sudo command
+    - '^pacman\s+-R'                   # Package removal
+    - '^pacman\s+-Scc'                 # Full cache clear
+    - '^pacman\s+-Syu'                 # System upgrade
+    - '^yay\s+-Syu'                    # AUR system upgrade
+    - '^rm\s+-r'                       # Recursive delete
+    - '^rm\s+.*-f'                     # Force delete
+    - '^systemctl\s+(enable|disable)'  # Persistent service changes
+    - '^reboot'                        # System reboot
+    - '^shutdown'                      # System shutdown
+    - '^poweroff'                      # System poweroff
+
+  # STANDARD: Execute with brief notification
+  standard:
+    - '^pacman\s+-S\s+'                # Package install
+    - '^pacman\s+-Sc$'                 # Clear old cache only
+    - '^yay\s+-S\s+'                   # AUR install
+    - '^mkdir\s+'                      # Create directory
+    - '^touch\s+'                      # Create file
+    - '^cp\s+'                         # Copy
+    - '^mv\s+'                         # Move
+    - '^rm\s+[^-]'                     # Simple delete (no flags)
+    - '^python\s+'                     # Python scripts
+    - '^python3\s+'                    # Python3 scripts
+    - '^pip\s+install'                 # Pip install
+    - '^npm\s+'                        # Node package manager
+    - '^cargo\s+'                      # Rust package manager
+    - '^systemctl\s+(start|stop|restart)'  # Service control
+    - '^chmod\s+'                      # Permission changes
+    - '^chown\s+'                      # Ownership changes
+    - '^nano\s+'                       # Text editing
+    - '^vim\s+'                        # Text editing
+    - '^nvim\s+'                       # Text editing
+    - '^code\s+'                       # VS Code
+
+  # AUTO: Execute immediately without prompting
+  auto:
+    - '^pacman\s+-Q'                   # Package queries
+    - '^pacman\s+-Ss'                  # Package search
+    - '^pacman\s+-Si'                  # Package info
+    - '^yay\s+-Q'                      # AUR queries
+    - '^yay\s+-Ss'                     # AUR search
+    - '^df\s+'                         # Disk usage
+    - '^df$'
+    - '^du\s+'                         # Directory size
+    - '^free'                          # Memory info
+    - '^uptime'                        # Uptime
+    - '^uname'                         # System info
+    - '^hostname'                      # Hostname
+    - '^whoami'                        # Current user
+    - '^id$'                           # User ID info
+    - '^pwd$'                          # Current directory
+    - '^date'                          # Date/time
+    - '^cal'                           # Calendar
+    - '^ls'                            # List files
+    - '^ll'                            # List files (alias)
+    - '^la'                            # List all (alias)
+    - '^cat\s+'                        # Read file
+    - '^head\s+'                       # Read file head
+    - '^tail\s+'                       # Read file tail
+    - '^less\s+'                       # Pager
+    - '^more\s+'                       # Pager
+    - '^grep\s+'                       # Search
+    - '^rg\s+'                         # Ripgrep
+    - '^find\s+'                       # Find files
+    - '^fd\s+'                         # Fd find
+    - '^locate\s+'                     # Locate files
+    - '^which\s+'                      # Which command
+    - '^whereis\s+'                    # Where is
+    - '^type\s+'                       # Type of command
+    - '^file\s+'                       # File type
+    - '^stat\s+'                       # File stats
+    - '^wc\s+'                         # Word count
+    - '^echo\s+'                       # Echo
+    - '^printf\s+'                     # Printf
+    - '^systemctl\s+status'            # Service status
+    - '^systemctl\s+list'              # Service listing
+    - '^systemctl\s+is-'               # Service checks
+    - '^journalctl'                    # Log viewing
+    - '^dmesg'                         # Kernel messages
+    - '^lsblk'                         # Block devices
+    - '^lsusb'                         # USB devices
+    - '^lspci'                         # PCI devices
+    - '^ip\s+a'                        # Network info
+    - '^ip\s+addr'                     # Network info
+    - '^ip\s+link'                     # Network links
+    - '^ss\s+'                         # Socket stats
+    - '^netstat'                       # Network stats
+    - '^ping\s+'                       # Ping
+    - '^curl\s+'                       # HTTP requests (read)
+    - '^wget\s+.*-O\s*-'               # Wget to stdout
+    - '^top$'                          # Process viewer
+    - '^htop$'                         # Process viewer
+    - '^btop$'                         # Process viewer
+    - '^ps\s+'                         # Process list
+    - '^pgrep\s+'                      # Process grep
+    - '^checkupdates'                  # Check for updates
+    - '^tree'                          # Directory tree
+    - '^bat\s+'                        # Bat (cat clone)
+    - '^exa'                           # Exa (ls clone)
+    - '^eza'                           # Eza (ls clone)
+    - '^neofetch'                      # System info
+    - '^fastfetch'                     # System info
+    - '^inxi'                          # System info
+
+# Paths where operations are more trusted (upgrades standard -> auto for safe commands)
+trusted_paths:
+  - '~/'
+  - '/home/'
+  - '/tmp/'
+  - '/var/tmp/'
+  - '/var/cache/pacman/'
+  - '/var/log/'
+
+# Quick task shortcuts - type the key to run the command
+tasks:
+  orphans: 'pacman -Qtd'
+  cache-size: 'du -sh /var/cache/pacman/pkg/'
+  cache-clear: 'pacman -Sc'
+  cache-full: 'pacman -Scc'
+  disk: 'df -h'
+  memory: 'free -h'
+  services: 'systemctl list-units --type=service --state=running'
+  failed: 'systemctl --failed'
+  updates: 'checkupdates'
+  recent: 'tail -20 /var/log/pacman.log'
+  kernel: 'uname -r'
+  uptime: 'uptime -p'
+  temps: 'sensors'
+  ports: 'ss -tuln'
+  procs: 'ps aux --sort=-%mem | head -15'
+  boot: 'systemd-analyze'
